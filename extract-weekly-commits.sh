@@ -162,53 +162,77 @@ extract_repo_commits() {
     fi
     
     # Count commits first (before text processing)
-    # Handle multiple emails by splitting and querying each one
+    # Handle multiple emails by combining them into a single regex pattern
     local commit_count=0
     local all_commits=""
     
-    # Convert comma-separated emails to array
+    # Convert comma-separated emails to array and validate
     IFS=',' read -ra EMAIL_ARRAY <<< "$USER_EMAIL"
+    local valid_emails=()
     
     for email in "${EMAIL_ARRAY[@]}"; do
       # Trim whitespace
       email=$(echo "$email" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
       
-      # Get commit count for this email
-      local email_commit_count=$(git rev-list \
-        --author="$email" \
-        --since="$MONDAY 00:00" \
-        --until="$FRIDAY 23:59" \
-        --count \
-        "$branch" 2>/dev/null)
-      
-      # Get formatted commit text for this email
-      local email_commits=$(git log \
-        --author="$email" \
-        --since="$MONDAY 00:00" \
-        --until="$FRIDAY 23:59" \
-        --pretty=format:"$git_format" \
-        --date=format:"%d-%m-%Y %H:%M" \
-        "$branch" 2>/dev/null | \
-        sed 's/[\r\n]\+/ /g' | \
-        sed 's/  */ /g' | \
-        sed 's/^ *//; s/ *$//')
-      
-      # Add to totals
-      commit_count=$((commit_count + email_commit_count))
-      if [ -n "$email_commits" ]; then
-        if [ -n "$all_commits" ]; then
-          all_commits="$all_commits"$'\n'"$email_commits"
-        else
-          all_commits="$email_commits"
-        fi
+      # Basic email validation
+      if ! [[ "$email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+        echo "    ⚠️  Invalid email format: $email"
+        continue
       fi
+      
+      valid_emails+=("$email")
     done
     
-    # Sort all commits by date (newest first)
-    if [ -n "$all_commits" ]; then
-      commits=$(echo "$all_commits" | sort -r)
-    else
+    # If no valid emails, skip processing
+    if [ ${#valid_emails[@]} -eq 0 ]; then
       commits=""
+    else
+      # Collect commits from all valid emails (simpler approach)
+      local all_commits_with_hash=""
+      
+      for email in "${valid_emails[@]}"; do
+        # Use exact email match - much more reliable than complex regex
+        local email_commits=$(git log \
+          --author="$email" \
+          --since="$MONDAY 00:00" \
+          --until="$FRIDAY 23:59" \
+          --pretty=format:"%H|%ct|$git_format" \
+          --date=format:"%d-%m-%Y %H:%M" \
+          "$branch" 2>/dev/null | \
+          sed 's/[\r\n]\+/ /g' | \
+          sed 's/  */ /g' | \
+          sed 's/^ *//; s/ *$//')
+        
+        if [ -n "$email_commits" ]; then
+          if [ -n "$all_commits_with_hash" ]; then
+            all_commits_with_hash="${all_commits_with_hash}
+$email_commits"
+          else
+            all_commits_with_hash="$email_commits"
+          fi
+        fi
+      done
+      
+      local commits_with_hash="$all_commits_with_hash"
+      
+      # Deduplicate by commit hash and sort by timestamp (newest first)
+      if [ -n "$commits_with_hash" ]; then
+        all_commits=$(echo "$commits_with_hash" | \
+          sort -u -t'|' -k1,1 | \
+          sort -t'|' -k2,2nr | \
+          cut -d'|' -f3-)
+        
+        # Count after deduplication
+        commit_count=$(echo "$commits_with_hash" | \
+          sort -u -t'|' -k1,1 | \
+          wc -l | \
+          tr -d ' ')
+        
+        commits="$all_commits"
+      else
+        commits=""
+        commit_count=0
+      fi
     fi
     
     popd > /dev/null
@@ -234,12 +258,10 @@ extract_repo_commits() {
   # Add summary to repository file
   if [ $total_commits -gt 0 ]; then
     echo "---" >> "$repo_output_file"
-    echo "Total commits: $total_commits" >> "$repo_output_file"
+    echo "Total commits: $total_commits" >> "$repo_output_file"  
     if [ "$total_commits" -eq 1 ]; then  
-      echo "Total commit: $total_commits" >> "$repo_output_file"  
       echo "📄 Repository report saved: $repo_output_file ($total_commits commit)"  
     else  
-      echo "Total commits: $total_commits" >> "$repo_output_file"  
       echo "📄 Repository report saved: $repo_output_file ($total_commits commits)"  
     fi 
   else
@@ -253,7 +275,7 @@ extract_repo_commits() {
 # Read configuration file and process repositories
 while IFS=':' read -r repo_path branches; do
   # Skip empty lines, comments, and configuration variables
-    if [ -z "$repo_path" ] || [[ "$repo_path" =~ ^[[:space:]]*# ]] || [[ "$repo_path" =~ ^[[:space:]]*BASE_PATH[[:space:]]*= ]] || [[ "$repo_path" =~ ^[[:space:]]*COMMIT_DETAIL[[:space:]]*=.*[[:space:]]*$ ]] || [[ "$repo_path" =~ ^[[:space:]]*USER_EMAIL[[:space:]]*=.*[[:space:]]*$ ]]; then  
+    if [ -z "$repo_path" ] || [[ "$repo_path" =~ ^[[:space:]]*# ]] || [[ "$repo_path" =~ ^[[:space:]]*BASE_PATH[[:space:]]*= ]] || [[ "$repo_path" =~ ^[[:space:]]*COMMIT_DETAIL[[:space:]]*= ]] || [[ "$repo_path" =~ ^[[:space:]]*USER_EMAIL[[:space:]]*= ]]; then  
     continue
   fi
   
