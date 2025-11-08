@@ -29,7 +29,7 @@ teardown() {
     for i in {1..10}; do
         local test_repo=$(setup_test_repo "repo$i" "master")
         cd "$test_repo"
-        create_commit_with_date "Commit in repo $i" "${MONDAY} 10:${i}:00"
+        create_commit_with_date "Commit in repo $i" "${MONDAY} 10:$(printf '%02d' $i):00"
         config_content+="repo$i:master"$'\n'
     done
     

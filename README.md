@@ -198,17 +198,21 @@ Control how much information is extracted from each commit:
 
 ### Include Weekends
 
-Want to include weekends too? Modify this line in the script:
+Want to include weekends too? The script currently calculates Monday-Friday of the current week using complex conditional logic. To include weekends, you need to modify the date calculation logic around lines 50-66 in the script:
+
+**Current logic (Monday-Friday):**
 
 ```bash
-FRIDAY=$(date -v +"$((5 - $DAY_OF_WEEK))"d +%Y-%m-%d)
+DAYS_TO_FRIDAY=$((5 - DAY_OF_WEEK))
 ```
 
-to:
+**Change to (Monday-Sunday):**
 
 ```bash
-FRIDAY=$(date -v +"$((7 - $DAY_OF_WEEK))"d +%Y-%m-%d)
+DAYS_TO_FRIDAY=$((7 - DAY_OF_WEEK))
 ```
+
+You'll also need to update the weekend handling logic in the `else` block that currently handles Saturday/Sunday by finding Friday of the current week.
 
 ### Default Branch
 

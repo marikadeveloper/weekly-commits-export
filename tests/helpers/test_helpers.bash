@@ -135,22 +135,22 @@ get_test_week_dates() {
     fi
     
     # Calculate other days of the week
-    if [ $days_from_monday -gt 1 ]; then
-        TUESDAY=$(date -v -"$((days_from_monday - 1))"d +%Y-%m-%d)
-    else
-        TUESDAY=$(date -v +1d +%Y-%m-%d)
-    fi
+    if [ $days_from_monday -eq 1 ]; then  
+        TUESDAY=$(date +%Y-%m-%d)  
+    else  
+        TUESDAY=$(date -v -"$((days_from_monday - 1))"d +%Y-%m-%d)  
+    fi  
+      
+    if [ $days_from_monday -eq 2 ]; then  
+        WEDNESDAY=$(date +%Y-%m-%d)  
+    else  
+        WEDNESDAY=$(date -v -"$((days_from_monday - 2))"d +%Y-%m-%d)  
+    fi  
     
-    if [ $days_from_monday -gt 2 ]; then
-        WEDNESDAY=$(date -v -"$((days_from_monday - 2))"d +%Y-%m-%d)
-    else
-        WEDNESDAY=$(date -v +2d +%Y-%m-%d)
-    fi
-    
-    if [ $days_from_monday -gt 3 ]; then
-        THURSDAY=$(date -v -"$((days_from_monday - 3))"d +%Y-%m-%d)
-    else
-        THURSDAY=$(date -v +3d +%Y-%m-%d)
+    if [ $days_from_monday -eq 3 ]; then  
+        THURSDAY=$(date +%Y-%m-%d)  
+    else  
+        THURSDAY=$(date -v -"$((days_from_monday - 3))"d +%Y-%m-%d) 
     fi
     
     echo "MONDAY=$MONDAY"

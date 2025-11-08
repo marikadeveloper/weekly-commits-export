@@ -18,8 +18,6 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 1
 fi
 
-# Read BASE_PATH and COMMIT_DETAIL from config file if specified
-BASE_PATH=""
 COMMIT_DETAIL="full"  # Default to full commit details
 
 while IFS= read -r line; do
@@ -171,11 +169,16 @@ extract_repo_commits() {
     
     # Add commits to repository-specific file
     if [ -n "$commits" ] && [ "$commit_count" -gt 0 ]; then
-      echo "## Branch: $branch ($commit_count commits)" >> "$repo_output_file"
+      if [ "$commit_count" -eq 1 ]; then
+        echo "## Branch: $branch ($commit_count commit)" >> "$repo_output_file"
+        echo "    ✅ Found $commit_count commit on $branch"
+      else
+        echo "## Branch: $branch ($commit_count commits)" >> "$repo_output_file"
+        echo "    ✅ Found $commit_count commits on $branch"
+      fi
       echo "" >> "$repo_output_file"
       echo "$commits" >> "$repo_output_file"
       echo "" >> "$repo_output_file"
-      echo "    ✅ Found $commit_count commits on $branch"
       total_commits=$((total_commits + commit_count))
     else
       echo "    ℹ️  No commits found on $branch"
@@ -186,7 +189,13 @@ extract_repo_commits() {
   if [ $total_commits -gt 0 ]; then
     echo "---" >> "$repo_output_file"
     echo "Total commits: $total_commits" >> "$repo_output_file"
-    echo "📄 Repository report saved: $repo_output_file ($total_commits commits)"
+    if [ "$total_commits" -eq 1 ]; then  
+      echo "Total commit: $total_commits" >> "$repo_output_file"  
+      echo "📄 Repository report saved: $repo_output_file ($total_commits commit)"  
+    else  
+      echo "Total commits: $total_commits" >> "$repo_output_file"  
+      echo "📄 Repository report saved: $repo_output_file ($total_commits commits)"  
+    fi 
   else
     echo "ℹ️  No commits found in $repo_path"
     rm "$repo_output_file"  # Remove empty file
@@ -198,7 +207,7 @@ extract_repo_commits() {
 # Read configuration file and process repositories
 while IFS=':' read -r repo_path branches; do
   # Skip empty lines, comments, and configuration variables
-  if [ -z "$repo_path" ] || [[ "$repo_path" =~ ^[[:space:]]*# ]] || [[ "$repo_path" =~ ^[[:space:]]*BASE_PATH[[:space:]]*= ]] || [[ "$repo_path" =~ ^[[:space:]]*COMMIT_DETAIL[[:space:]]*= ]]; then
+    if [ -z "$repo_path" ] || [[ "$repo_path" =~ ^[[:space:]]*# ]] || [[ "$repo_path" =~ ^[[:space:]]*BASE_PATH[[:space:]]*= ]] || [[ "$repo_path" =~ ^[[:space:]]*COMMIT_DETAIL[[:space:]]*=.*[[:space:]]*$ ]]; then  
     continue
   fi
   
@@ -225,5 +234,10 @@ if [ $PROCESSED_REPOS -eq 0 ]; then
   echo "📝 Format: repo_path:branch1,branch2"
 else
   echo "✅ All repository reports saved to: $REPORTS_DIR"
-  echo "📊 Weekly summary generated for $MONDAY to $FRIDAY ($PROCESSED_REPOS repositories processed)"
+  if [ "$PROCESSED_REPOS" -eq 1 ]; then  
+    REPO_WORD="repository"  
+  else  
+    REPO_WORD="repositories"  
+  fi  
+  echo "📊 Weekly summary generated for $MONDAY to $FRIDAY ($PROCESSED_REPOS $REPO_WORD processed)" 
 fi

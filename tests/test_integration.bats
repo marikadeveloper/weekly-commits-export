@@ -211,5 +211,5 @@ EOF
     run bash extract-weekly-commits.sh
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Using base path from config" ]]
-    [[ "$output" =~ "Found 1 commits" ]]
+    [[ "$output" =~ "Found 1 commit" ]]
 }

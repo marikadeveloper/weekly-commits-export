@@ -58,7 +58,7 @@ fi
 
 echo
 
-# Run performance tests (if enabled)
+# Run performance tests
 echo "⚡ Running performance tests..."
 if bats "$SCRIPT_DIR/test_performance.bats"; then
     echo "✅ Performance tests passed"
