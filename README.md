@@ -8,8 +8,9 @@ Perfect for writing weekly reports, standups, or just keeping track of what you'
 - ✅ **Multiple repositories support** with flexible configuration
 - ✅ **Configurable branches** per repository
 - ✅ **Optional base path** for relative repository paths
+- ✅ **Multiple email addresses support** for filtering commits
 - ✅ **Configurable commit detail level** (title only or full)
-- ✅ Filters commits by **your Git email**
+- ✅ Filters commits by **your Git email** (configurable or auto-detected)
 - 🗓️ Includes commits **only from Monday to Friday** of the current week
 - 🕒 Adds the **date and time** before each commit
 - 🧹 Flattens multi-line commit messages into a single clean line
@@ -85,6 +86,11 @@ Create a `repos.conf` file with your repositories:
 ```bash
 # Optional: Set base path for relative repository paths
 BASE_PATH=/Users/username/projects
+
+# User email(s) to filter commits (optional, fallback to git config)
+# Use comma-separated list for multiple emails
+USER_EMAIL=you@example.com
+# USER_EMAIL=work@company.com,personal@gmail.com
 
 # Commit detail level: "title" (subject only) or "full" (subject + body)
 COMMIT_DETAIL=title
@@ -176,6 +182,52 @@ Set a common base directory for relative repository paths:
 ```bash
 BASE_PATH=/Users/username/projects
 ```
+
+### User Email
+
+Configure which email addresses to use for filtering commits. If not specified, falls back to your git configuration:
+
+**Single email:**
+
+```bash
+USER_EMAIL=you@example.com
+```
+
+**Multiple emails (comma-separated):**
+
+```bash
+USER_EMAIL=work@company.com,personal@gmail.com
+```
+
+The script will search for commits from all specified email addresses and merge the results. This is useful when you use different email addresses for work and personal projects.
+
+### GitHub Hidden Email Addresses
+
+⚠️ **Important for GitHub users**: If you have enabled "Keep my email addresses private" in your GitHub settings, your commits might be authored with a GitHub-generated email address instead of your real email.
+
+GitHub uses the format: `<number>+<username>@users.noreply.github.com`
+
+**How to find your GitHub hidden email:**
+
+1. Go to [GitHub Settings → Emails](https://github.com/settings/emails)
+2. Look for the email address in the format: `123456789+yourusername@users.noreply.github.com`
+3. Use this email address in your configuration:
+
+```bash
+# Example with GitHub hidden email
+USER_EMAIL=123456789+yourusername@users.noreply.github.com
+
+# Or combine with your real email
+USER_EMAIL=you@example.com,123456789+yourusername@users.noreply.github.com
+```
+
+**To check which email Git is currently using:**
+
+```bash
+git config user.email
+```
+
+If this shows a GitHub noreply address, make sure to use that same address in your `USER_EMAIL` configuration to properly filter your commits.
 
 ### Commit Detail Level
 

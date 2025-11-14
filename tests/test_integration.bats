@@ -213,3 +213,69 @@ EOF
     [[ "$output" =~ "Using base path from config" ]]
     [[ "$output" =~ "Found 1 commit" ]]
 }
+
+# Test: Integration with multiple emails configuration
+@test "integration test with multiple email addresses" {
+    # Create multiple repositories with different commit authors
+    local frontend_repo=$(setup_test_repo "frontend" "master")
+    local backend_repo=$(setup_test_repo "backend" "master")
+    
+    eval $(get_test_week_dates)
+    
+    # Frontend commits with work email
+    cd "$frontend_repo"
+    git config user.email "work@company.com"
+    create_commit_with_date "Frontend feature" "${MONDAY} 09:00:00"
+    create_commit_with_date "Fix frontend bug" "${TUESDAY} 14:00:00"
+    
+    # Backend commits with personal email
+    cd "$backend_repo"
+    git config user.email "personal@gmail.com"
+    create_commit_with_date "Backend API update" "${WEDNESDAY} 10:00:00"
+    
+    # Add some commits that should be ignored
+    git config user.email "other@elsewhere.com"
+    create_commit_with_date "Other person's commit" "${THURSDAY} 15:00:00"
+    
+    cd "${BATS_TMPDIR}"
+    cat > repos.conf << EOF
+# Multi-email integration test
+BASE_PATH=${BATS_TMPDIR}/test_repos
+USER_EMAIL=work@company.com,personal@gmail.com
+COMMIT_DETAIL=full
+
+# Test repositories
+frontend:master
+backend:master
+EOF
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 0 ]
+    
+    # Verify processing messages
+    [[ "$output" =~ "Using email(s) from config: work@company.com,personal@gmail.com" ]]
+    [[ "$output" =~ "Processing: ${BATS_TMPDIR}/test_repos/frontend" ]]
+    [[ "$output" =~ "Processing: ${BATS_TMPDIR}/test_repos/backend" ]]
+    [[ "$output" =~ "Found 2 commits on master" ]]  # Frontend
+    [[ "$output" =~ "Found 1 commit on master" ]]   # Backend
+    
+    # Verify report files exist
+    local report_dir="reports/$(date +%Y-%m-%d)"
+    [ -d "$report_dir" ]
+    [ -f "$report_dir/frontend.txt" ]
+    [ -f "$report_dir/backend.txt" ]
+    
+    # Check frontend report content
+    grep -q "Frontend feature" "$report_dir/frontend.txt"
+    grep -q "Fix frontend bug" "$report_dir/frontend.txt"
+    grep -q "Total commits: 2" "$report_dir/frontend.txt"
+    grep -q "Author: work@company.com,personal@gmail.com" "$report_dir/frontend.txt"
+    
+    # Check backend report content  
+    grep -q "Backend API update" "$report_dir/backend.txt"
+    grep -q "Total commits: 1" "$report_dir/backend.txt"
+    ! grep -q "Other person's commit" "$report_dir/backend.txt"
+    
+    # Verify final summary
+    [[ "$output" =~ "2 repositories processed" ]]
+}

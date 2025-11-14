@@ -54,11 +54,20 @@ setup_test_config() {
     local base_path="$2"
     local repos="$3"
     local commit_detail="${4:-full}"
+    local user_email="${5:-}"
     
     cat > "$config_file" << EOF
 # Test configuration for weekly-commits-export
 BASE_PATH=$base_path
 COMMIT_DETAIL=$commit_detail
+EOF
+
+    # Add USER_EMAIL if specified
+    if [ -n "$user_email" ]; then
+        echo "USER_EMAIL=$user_email" >> "$config_file"
+    fi
+    
+    cat >> "$config_file" << EOF
 
 # Test repositories
 $repos

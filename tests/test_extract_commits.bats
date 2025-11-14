@@ -56,7 +56,7 @@ teardown() {
     setup_test_config "repos.conf" "$test_base" "test:main"
     
     # Mock the rest of the script to just show config parsing
-    sed -i.bak '/^# Get the email from git config/,$d' extract-weekly-commits.sh
+    sed -i.bak '/^# Get the email from config/,$d' extract-weekly-commits.sh
     echo 'echo "BASE_PATH: $BASE_PATH"' >> extract-weekly-commits.sh
     
     run bash extract-weekly-commits.sh
@@ -69,7 +69,7 @@ teardown() {
     setup_test_config "repos.conf" "/tmp" "test:main" "title"
     
     # Mock the rest of the script to just show config parsing
-    sed -i.bak '/^# Get the email from git config/,$d' extract-weekly-commits.sh
+    sed -i.bak '/^# Get the email from config/,$d' extract-weekly-commits.sh
     echo 'echo "COMMIT_DETAIL: $COMMIT_DETAIL"' >> extract-weekly-commits.sh
     
     run bash extract-weekly-commits.sh
@@ -233,4 +233,140 @@ teardown() {
     grep -q "Repository: test_repo" "$report_file"
     grep -q "Author: test@example.com" "$report_file"
     grep -q "## Branch: master" "$report_file"
+}
+
+# Test: USER_EMAIL configuration parsing
+@test "correctly parses USER_EMAIL from config" {
+    setup_test_config "repos.conf" "/tmp" "test:main" "full" "custom@example.com"
+    
+    # Mock the rest of the script to just show config parsing
+    sed -i.bak '/^# Get the email from config/,$d' extract-weekly-commits.sh
+    echo 'echo "USER_EMAIL: $USER_EMAIL"' >> extract-weekly-commits.sh
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "USER_EMAIL: custom@example.com" ]]
+}
+
+# Test: Multiple emails configuration
+@test "handles multiple emails from config" {
+    local test_repo=$(setup_test_repo "test_repo" "master")
+    cd "$test_repo"
+    eval $(get_test_week_dates)
+    
+    # Create commits with different emails
+    git config user.email "first@example.com"
+    create_commit_with_date "First email commit" "${MONDAY} 09:00:00"
+    
+    git config user.email "second@example.com"
+    create_commit_with_date "Second email commit" "${TUESDAY} 10:00:00"
+    
+    # Setup config with multiple emails
+    cd "${BATS_TMPDIR}"
+    cat > repos.conf << EOF
+BASE_PATH=${BATS_TMPDIR}/test_repos
+USER_EMAIL=first@example.com,second@example.com
+COMMIT_DETAIL=title
+
+test_repo:master
+EOF
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Using email(s) from config: first@example.com,second@example.com" ]]
+    [[ "$output" =~ "Found 2 commits on master" ]]
+    
+    # Check that report file contains both commits
+    local report_file="reports/$(date +%Y-%m-%d)/test_repo.txt"
+    [ -f "$report_file" ]
+    grep -q "First email commit" "$report_file"
+    grep -q "Second email commit" "$report_file"
+    grep -q "Total commits: 2" "$report_file"
+}
+
+# Test: Fallback to git config when USER_EMAIL not specified
+@test "falls back to git config when USER_EMAIL not specified" {
+    local test_repo=$(setup_test_repo "test_repo" "master")
+    cd "$test_repo"
+    eval $(get_test_week_dates)
+    create_commit_with_date "Git config commit" "${MONDAY} 10:00:00"
+    
+    cd "${BATS_TMPDIR}"
+    setup_test_config "repos.conf" "${BATS_TMPDIR}/test_repos" "test_repo:master"
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Using git configured email: test@example.com" ]]
+    [[ "$output" =~ "Found 1 commit on master" ]]
+}
+
+# Test: Error when no email configured anywhere
+@test "shows error when no email configured anywhere" {
+    setup_test_config "repos.conf" "/tmp" "test:main"
+    
+    # Save current git configuration
+    save_git_config
+    
+    # Unset all git emails
+    git config --global --unset user.email || true
+    git config --unset user.email || true
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "No email configured" ]]
+    [[ "$output" =~ "USER_EMAIL=you@example.com" ]]
+    [[ "$output" =~ "USER_EMAIL=work@company.com,personal@gmail.com" ]]
+    
+    # Restore original git configuration
+    restore_git_config
+}
+
+# Test: EMAIL filtering with multiple repositories
+@test "filters commits by multiple emails across repositories" {
+    # Setup two repositories
+    local repo1=$(setup_test_repo "repo1" "master")
+    local repo2=$(setup_test_repo "repo2" "master")
+    
+    eval $(get_test_week_dates)
+    
+    # Repo1 with first email
+    cd "$repo1"
+    git config user.email "work@company.com"
+    create_commit_with_date "Work commit in repo1" "${MONDAY} 09:00:00"
+    
+    # Repo2 with second email
+    cd "$repo2"
+    git config user.email "personal@gmail.com"
+    create_commit_with_date "Personal commit in repo2" "${TUESDAY} 10:00:00"
+    
+    # Add commits with different emails that should be ignored
+    git config user.email "other@elsewhere.com"
+    create_commit_with_date "Other commit" "${WEDNESDAY} 11:00:00"
+    
+    cd "${BATS_TMPDIR}"
+    cat > repos.conf << EOF
+BASE_PATH=${BATS_TMPDIR}/test_repos
+USER_EMAIL=work@company.com,personal@gmail.com
+COMMIT_DETAIL=title
+
+repo1:master
+repo2:master
+EOF
+    
+    run bash extract-weekly-commits.sh
+    [ "$status" -eq 0 ]
+    
+    # Check that only commits from specified emails are included
+    local report1="reports/$(date +%Y-%m-%d)/repo1.txt"
+    local report2="reports/$(date +%Y-%m-%d)/repo2.txt"
+    
+    [ -f "$report1" ]
+    [ -f "$report2" ]
+    
+    grep -q "Work commit in repo1" "$report1"
+    grep -q "Personal commit in repo2" "$report2"
+    ! grep -q "Other commit" "$report2"
+    
+    grep -q "Total commits: 1" "$report1"
+    grep -q "Total commits: 1" "$report2"
 }
